@@ -16,6 +16,8 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
+// #include <geometry_msgs/Point.h>
+// #include <geometry_msgs/Quaternion.h>
 
 
 
@@ -30,13 +32,16 @@ class UavDDPNode
     ros::Subscriber sb_twist_;
 
     // Crocoddyl related
+    int bl_frameid_;
     pinocchio::Model uav_model_;
     boost::shared_ptr<crocoddyl::UavUamParams> uav_params_;
     boost::shared_ptr<crocoddyl::WayPoint> wp_;
-    int bl_frameid_;
     boost::shared_ptr<crocoddyl::SimpleUavUamGotoProblem> nav_problem_;
     boost::shared_ptr<crocoddyl::ShootingProblem> ddp_problem_;
 
+    Eigen::VectorXd x0_;
+    std::vector<Eigen::VectorXd> x_traj_;
+    std::vector<Eigen::VectorXd> u_traj_;
     
 
     public: //methods
