@@ -16,7 +16,7 @@ UavDDPNode::UavDDPNode()
     tpos << 0,0,1;
     Eigen::Quaterniond tquat(1,0,0,0);
     Eigen::Vector3d zero_vel = Eigen::Vector3d::Zero();
-    crocoddyl::WayPoint wp(100, tpos, tquat, zero_vel, zero_vel);
+    wp_ = boost::make_shared<crocoddyl::WayPoint>(100, tpos, tquat, zero_vel, zero_vel);
 
     nav_problem_ = boost::make_shared<crocoddyl::SimpleUavUamGotoProblem>(uav_model_, uav_params_);
 
@@ -30,7 +30,7 @@ UavDDPNode::~UavDDPNode(){}
 
 void UavDDPNode::updateDDPProblem()
 {
-    ddp_problem_ = nav_problem_->createProblem(x0_, wp_, dt_, bl_frameid_);
+    ddp_problem_ = nav_problem_->createProblem(x0_, *wp_.get(), dt_, bl_frameid_);
 }
 
 
