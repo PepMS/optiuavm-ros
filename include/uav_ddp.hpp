@@ -33,6 +33,7 @@ class UavDDPNode
 
     // Crocoddyl related
     int bl_frameid_;
+    bool dt_;
     pinocchio::Model uav_model_;
     boost::shared_ptr<crocoddyl::UavUamParams> uav_params_;
     boost::shared_ptr<crocoddyl::WayPoint> wp_;
@@ -45,10 +46,12 @@ class UavDDPNode
     
 
     public: //methods
+    UavDDPNode();
+    ~UavDDPNode();
+    void updateDDPProblem();
+
     void callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose);
     void callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_twist);
 
-    UavDDPNode();
-
-    ~UavDDPNode();
+    
 };

@@ -9,8 +9,8 @@ UavDDPNode::UavDDPNode()
     
     
     x0_ = Eigen::VectorXd::Zero(uav_model_.nv*2 + 1);
-
     bl_frameid_ = uav_model_.getFrameId("base_link");
+    dt_ = 2e-2;
     
     Eigen::Vector3d tpos;
     tpos << 0,0,1;
@@ -27,6 +27,12 @@ UavDDPNode::UavDDPNode()
 }
 
 UavDDPNode::~UavDDPNode(){}
+
+void UavDDPNode::updateDDPProblem()
+{
+    ddp_problem_ = nav_problem_->createProblem(x0_, wp_, dt_, bl_frameid_);
+}
+
 
 void UavDDPNode::callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose)
 {
@@ -62,7 +68,8 @@ int main(int argc, char **argv)
     while (ros::ok())
     {
         
-        // croco_node->ddp_problem_ = croco_node->nav_problem_->createProblem(x0_, wp, 2e-2, bl_frameid_);
+        croco_node.updateDDPProblem();
+        crocoddyl::SolverFDDP(croco_node.ddp_problem_);
         
         ros::spinOnce();
         loop_rate.sleep();
