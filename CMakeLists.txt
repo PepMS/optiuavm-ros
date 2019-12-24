@@ -109,7 +109,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
  INCLUDE_DIRS include
 #  LIBRARIES uav-optimal-control
-#  CATKIN_DEPENDS mavros roscpp std_msgs
+ CATKIN_DEPENDS mavros roscpp std_msgs geometry_msgs
 #  DEPENDS system_lib
 )
 
@@ -153,6 +153,7 @@ add_executable(${PROJECT_NAME}_node src/uav_ddp.cpp)
 # Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
+  -lcrocoddyl
 )
 
 #############
