@@ -21,8 +21,9 @@ UavDDPNode::UavDDPNode()
     nav_problem_ = boost::make_shared<crocoddyl::SimpleUavUamGotoProblem>(uav_model_, uav_params_);
 
     // Publishers and subscribers
-    sb_pose_ = nh_.subscribe("mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
-    sb_twist_ = nh_.subscribe("mavros/local_position/velocity_body", 1, &UavDDPNode::callbackTwist, this);
+    sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
+    sb_twist_ = nh_.subscribe("/mavros/local_position/velocity_body", 1, &UavDDPNode::callbackTwist, this);
+    pub_motor_ = nh_.advertise<mavros_msgs::ActuatorControl>("/mavros/actuator_control", 10);
     
 }
 
@@ -37,11 +38,11 @@ void UavDDPNode::updateDDPProblem()
 void UavDDPNode::callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose)
 {
     geometry_msgs::Pose pose = msg_pose->pose; 
-    Eigen::VectorXd x0_pose(7);
+    Eigen::Quaterniond quat0(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
+    quat0.normalize();
     
-    x0_pose << pose.position.x, pose.position.y, pose.position.z, pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w;
-    
-    x0_.head(7) = x0_pose; 
+    x0_.head(3) << pose.position.x, pose.position.y, pose.position.z;
+    x0_.segment(3,4) << quat0.x(), quat0.y(), quat0.z(), quat0.w();
 
     // std::cout << "New position:" << std::endl << x0_ << std::endl;
 }
@@ -58,6 +59,21 @@ void UavDDPNode::callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_
     // std::cout << "New position:" << std::endl << x0_ << std::endl;
 }
 
+void UavDDPNode::publishControls()
+{
+    mavros_msgs::ActuatorControl motor_msg;
+    motor_msg.group_mix = motor_msg.PX4_MIX_FLIGHT_CONTROL;
+    boost::array<float, 8> motor_ctrls;
+    motor_msg.controls.at(0) = u_traj_[0][0];
+    motor_msg.controls.at(1) = u_traj_[0][1];
+    motor_msg.controls.at(2) = u_traj_[0][2];
+    motor_msg.controls.at(3) = u_traj_[0][3];
+
+    // motor_msg.header.stamp = ros::Time::now();
+
+    pub_motor_.publish(motor_msg);
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, ros::this_node::getName());
@@ -69,8 +85,13 @@ int main(int argc, char **argv)
     {
         
         croco_node.updateDDPProblem();
-        crocoddyl::SolverFDDP(croco_node.ddp_problem_);
-        
+        crocoddyl::SolverFDDP fddp(croco_node.ddp_problem_);
+        fddp.solve();
+        croco_node.x_traj_ = fddp.get_xs();
+        croco_node.u_traj_ = fddp.get_us();  
+
+        croco_node.publishControls();
+
         ros::spinOnce();
         loop_rate.sleep();
     }

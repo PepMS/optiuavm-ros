@@ -2,10 +2,12 @@
  *  Libraries includes    *
  **************************/
 #include <pinocchio/parsers/urdf.hpp>
+#include <pinocchio/math/quaternion.hpp>
 #include <example-robot-data/path.hpp>
 #include <crocoddyl/multibody/actuations/uav-uam.hpp>
 #include <crocoddyl/multibody/utils/uavuam-goto.hpp>
 #include <crocoddyl/core/solvers/fddp.hpp>
+
 /**************************
  *      STD includes      *
  **************************/
@@ -16,11 +18,7 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
-// #include <geometry_msgs/Point.h>
-// #include <geometry_msgs/Quaternion.h>
-
-
-
+#include <mavros_msgs/ActuatorControl.h>
 
 class UavDDPNode 
 {
@@ -30,6 +28,7 @@ class UavDDPNode
     ros::NodeHandle nh_;
     ros::Subscriber sb_pose_;
     ros::Subscriber sb_twist_;
+    ros::Publisher pub_motor_;
 
     // Crocoddyl related
     int bl_frameid_;
@@ -52,6 +51,6 @@ class UavDDPNode
 
     void callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose);
     void callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_twist);
-
+    void publishControls();
     
 };
