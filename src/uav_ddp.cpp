@@ -23,7 +23,7 @@ UavDDPNode::UavDDPNode()
     // Publishers and subscribers
     sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
     sb_twist_ = nh_.subscribe("/mavros/local_position/velocity_body", 1, &UavDDPNode::callbackTwist, this);
-    pub_motor_ = nh_.advertise<mavros_msgs::ActuatorControl>("/mavros/actuator_control", 10);
+    pub_motor_ = nh_.advertise<mavros_msgs::ActuatorControl>("/optctl/actuator_control", 10);
     
 }
 
@@ -61,15 +61,21 @@ void UavDDPNode::callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_
 
 void UavDDPNode::publishControls()
 {
-    mavros_msgs::ActuatorControl motor_msg;
-    motor_msg.group_mix = motor_msg.PX4_MIX_FLIGHT_CONTROL;
-    boost::array<float, 8> motor_ctrls;
-    motor_msg.controls.at(0) = u_traj_[0][0];
-    motor_msg.controls.at(1) = u_traj_[0][1];
-    motor_msg.controls.at(2) = u_traj_[0][2];
-    motor_msg.controls.at(3) = u_traj_[0][3];
+    // mavros_msgs::ActuatorControl motor_msg;
+    // motor_msg.group_mix = motor_msg.PX4_MIX_FLIGHT_CONTROL;
+    // boost::array<float, 8> motor_ctrls;
+    // motor_msg.controls.at(0) = u_traj_[0][0];
+    // motor_msg.controls.at(1) = u_traj_[0][1];
+    // motor_msg.controls.at(2) = u_traj_[0][2];
+    // motor_msg.controls.at(3) = u_traj_[0][3];
 
-    // motor_msg.header.stamp = ros::Time::now();
+    mavros_msgs::HilActuatorControls motor_msg;
+    
+    boost::array<float, 8> motor_ctrls;
+    motor_msg.controls.at(0) = 0.0;
+    motor_msg.controls.at(1) = 0.0;
+    motor_msg.controls.at(2) = 0.0;
+    motor_msg.controls.at(3) = 0.6;
 
     pub_motor_.publish(motor_msg);
 }
@@ -78,7 +84,7 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, ros::this_node::getName());
     UavDDPNode croco_node;
-    ros::Rate loop_rate(100);
+    ros::Rate loop_rate(200);
 
 
     while (ros::ok())
@@ -86,10 +92,11 @@ int main(int argc, char **argv)
         
         croco_node.updateDDPProblem();
         crocoddyl::SolverFDDP fddp(croco_node.ddp_problem_);
-        fddp.solve();
+        
+        fddp.solve(croco_node.x_traj_, croco_node.u_traj_);
         croco_node.x_traj_ = fddp.get_xs();
         croco_node.u_traj_ = fddp.get_us();  
-
+        
         croco_node.publishControls();
 
         ros::spinOnce();

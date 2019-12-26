@@ -19,6 +19,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <mavros_msgs/ActuatorControl.h>
+#include <mavros_msgs/HilActuatorControls.h>
 
 class UavDDPNode 
 {
