@@ -20,6 +20,7 @@
 #include <geometry_msgs/TwistStamped.h>
 #include <mavros_msgs/ActuatorControl.h>
 #include <mavros_msgs/HilActuatorControls.h>
+#include <uav_oc_msgs/UAVOptCtlPolicy.h>
 
 class UavDDPNode 
 {

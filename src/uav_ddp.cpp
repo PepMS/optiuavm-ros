@@ -23,7 +23,7 @@ UavDDPNode::UavDDPNode()
     // Publishers and subscribers
     sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
     sb_twist_ = nh_.subscribe("/mavros/local_position/velocity_body", 1, &UavDDPNode::callbackTwist, this);
-    pub_motor_ = nh_.advertise<mavros_msgs::ActuatorControl>("/optctl/actuator_control", 10);
+    pub_motor_ = nh_.advertise<uav_oc_msgs::UAVOptCtlPolicy>("/optctl/actuator_control", 10);
     
 }
 
