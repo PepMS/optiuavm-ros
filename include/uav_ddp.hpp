@@ -30,7 +30,7 @@ class UavDDPNode
     ros::NodeHandle nh_;
     ros::Subscriber sb_pose_;
     ros::Subscriber sb_twist_;
-    ros::Publisher pub_motor_;
+    ros::Publisher pub_policy_;
 
     // Crocoddyl related
     int bl_frameid_;

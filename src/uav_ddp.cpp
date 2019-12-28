@@ -23,7 +23,7 @@ UavDDPNode::UavDDPNode()
     // Publishers and subscribers
     sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
     sb_twist_ = nh_.subscribe("/mavros/local_position/velocity_body", 1, &UavDDPNode::callbackTwist, this);
-    pub_motor_ = nh_.advertise<uav_oc_msgs::UAVOptCtlPolicy>("/optctl/actuator_control", 10);
+    pub_policy_ = nh_.advertise<uav_oc_msgs::UAVOptCtlPolicy>("/optctl/actuator_control", 10);
     
 }
 
@@ -61,23 +61,14 @@ void UavDDPNode::callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_
 
 void UavDDPNode::publishControls()
 {
-    // mavros_msgs::ActuatorControl motor_msg;
-    // motor_msg.group_mix = motor_msg.PX4_MIX_FLIGHT_CONTROL;
-    // boost::array<float, 8> motor_ctrls;
-    // motor_msg.controls.at(0) = u_traj_[0][0];
-    // motor_msg.controls.at(1) = u_traj_[0][1];
-    // motor_msg.controls.at(2) = u_traj_[0][2];
-    // motor_msg.controls.at(3) = u_traj_[0][3];
-
-    mavros_msgs::HilActuatorControls motor_msg;
+    uav_oc_msgs::UAVOptCtlPolicy policy_msg;
     
-    boost::array<float, 8> motor_ctrls;
-    motor_msg.controls.at(0) = 0.0;
-    motor_msg.controls.at(1) = 0.0;
-    motor_msg.controls.at(2) = 0.0;
-    motor_msg.controls.at(3) = 0.6;
+    policy_msg.ffterm.mx = u_traj_[0][0];
+    policy_msg.ffterm.my = u_traj_[0][1];
+    policy_msg.ffterm.mz = u_traj_[0][2];
+    policy_msg.ffterm.th = u_traj_[0][3];
 
-    pub_motor_.publish(motor_msg);
+    pub_policy_.publish(policy_msg);
 }
 
 int main(int argc, char **argv)
