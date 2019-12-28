@@ -66,7 +66,7 @@ void UavDDPNode::publishControls()
     policy_msg.ffterm.mx = u_traj_[0][0];
     policy_msg.ffterm.my = u_traj_[0][1];
     policy_msg.ffterm.mz = u_traj_[0][2];
-    policy_msg.ffterm.th = u_traj_[0][3];
+    policy_msg.ffterm.th = 0.6;
 
     pub_policy_.publish(policy_msg);
 }
