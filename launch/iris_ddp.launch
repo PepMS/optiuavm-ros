@@ -1,3 +1,5 @@
 <launch>
-    <include file="$(find px4)/launch/mavros_posix_sitl.launch"/>
+    <!-- <include file="$(find px4)/launch/mavros_posix_sitl.launch"/> -->
+    <rosparam file="$(find uav_optimal_control)/config/iris.yaml" />
+    <node name="uav_optctl_ddp" pkg="uav_optimal_control" type="uav_optimal_control_node" output="screen" />
 </launch>
