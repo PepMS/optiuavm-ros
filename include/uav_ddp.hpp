@@ -49,7 +49,9 @@ class UavDDPNode
     public: //methods
     UavDDPNode();
     ~UavDDPNode();
+    void fillUavParams();
     void updateDDPProblem();
+    
 
     void callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose);
     void callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_twist);
