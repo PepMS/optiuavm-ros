@@ -132,8 +132,7 @@ void UavDDPNode::publishControls()
     policy_msg.u_desired = std::vector<float>(uav_params_->n_rotors_);
     for (int ii = 0; ii < uav_params_->n_rotors_; ++ii)
     {
-        policy_msg.u_desired[ii] = nav_problem_->actuation_->calc();
-        fddp_->get_us()[0][ii];
+        policy_msg.u_desired[ii] = fddp_->get_us()[0][ii];
     }
     
     // State desired for the current node
