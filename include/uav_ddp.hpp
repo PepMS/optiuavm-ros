@@ -7,6 +7,8 @@
 #include <crocoddyl/multibody/actuations/uav-uam.hpp>
 #include <crocoddyl/multibody/utils/uavuam-goto.hpp>
 #include <crocoddyl/core/solvers/fddp.hpp>
+#include <crocoddyl/core/utils/callbacks.hpp>
+
 
 /**************************
  *      STD includes      *
@@ -40,6 +42,9 @@ class UavDDPNode
     boost::shared_ptr<crocoddyl::WayPoint> wp_;
     boost::shared_ptr<crocoddyl::SimpleUavUamGotoProblem> nav_problem_;
     boost::shared_ptr<crocoddyl::ShootingProblem> ddp_problem_;
+    boost::shared_ptr<crocoddyl::SolverFDDP> fddp_;
+    // Solver Callbacks
+    std::vector<boost::shared_ptr<crocoddyl::CallbackAbstract> > fddp_cbs_;
 
     Eigen::VectorXd x0_;
     std::vector<Eigen::VectorXd> x_traj_;
@@ -50,8 +55,7 @@ class UavDDPNode
     UavDDPNode();
     ~UavDDPNode();
     void fillUavParams();
-    void updateDDPProblem();
-    
+    void initializeDDP();   
 
     void callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose);
     void callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_twist);

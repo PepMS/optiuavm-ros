@@ -3,26 +3,9 @@
 
 UavDDPNode::UavDDPNode()
 {
-    uav_params_ = boost::make_shared<crocoddyl::UavUamParams>();
+    // Initialize specific classes needed in the DDP solver
+    initializeDDP();
     
-    // Parse parameters to fill the UAV params object
-    fillUavParams();
-    
-    // DDP solver related  
-    pinocchio::urdf::buildModel(EXAMPLE_ROBOT_DATA_MODEL_DIR "/hector_description/robots/quadrotor_base.urdf", pinocchio::JointModelFreeFlyer(), uav_model_);
-    
-    x0_ = Eigen::VectorXd::Zero(uav_model_.nv*2 + 1);
-    bl_frameid_ = uav_model_.getFrameId("base_link");
-    dt_ = 2e-2;
-    
-    Eigen::Vector3d tpos;
-    tpos << 0,0,1;
-    Eigen::Quaterniond tquat(1,0,0,0);
-    Eigen::Vector3d zero_vel = Eigen::Vector3d::Zero();
-    wp_ = boost::make_shared<crocoddyl::WayPoint>(100, tpos, tquat, zero_vel, zero_vel);
-    
-    nav_problem_ = boost::make_shared<crocoddyl::SimpleUavUamGotoProblem>(uav_model_, uav_params_);
-
     // Publishers and subscribers
     sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
     sb_twist_ = nh_.subscribe("/mavros/local_position/velocity_body", 1, &UavDDPNode::callbackTwist, this);
@@ -30,6 +13,44 @@ UavDDPNode::UavDDPNode()
 }
 
 UavDDPNode::~UavDDPNode(){}
+
+void UavDDPNode::initializeDDP()
+{
+    // Load URDF Model
+    pinocchio::urdf::buildModel(EXAMPLE_ROBOT_DATA_MODEL_DIR "/iris_description/robots/iris_simple.urdf",  pinocchio::JointModelFreeFlyer(), uav_model_);
+
+    // Load UAV params
+    uav_params_ = boost::make_shared<crocoddyl::UavUamParams>();
+    fillUavParams();
+
+    // Frame we want in the cost function
+    bl_frameid_ = uav_model_.getFrameId("iris__base_link");
+
+    // x0_:Set an initial pose (should be read from topic)
+    x0_ = Eigen::VectorXd::Zero(uav_model_.nv*2 + 1);
+    x0_(6) = 1.0;
+    
+    // This may be problematic as tpos and tquat are passed by reference so when the constructor ends, it may destruct both variables.
+    Eigen::Vector3d tpos;
+    tpos << 0,0,1;
+    Eigen::Quaterniond tquat(1,0,0,0);
+    Eigen::Vector3d zero_vel = Eigen::Vector3d::Zero();
+    wp_ = boost::make_shared<crocoddyl::WayPoint>(100, tpos, tquat, zero_vel, zero_vel);
+
+    // Navigation problem
+    nav_problem_ = boost::make_shared<crocoddyl::SimpleUavUamGotoProblem>(uav_model_, uav_params_);
+
+    // Shooting problem
+    ddp_problem_ = nav_problem_->createProblem(x0_, *wp_.get(), 2e-2, bl_frameid_);
+
+    // Solver callbacks
+    fddp_cbs_.push_back(boost::make_shared<crocoddyl::CallbackVerbose>());
+
+    // Setting the solver
+    fddp_ = boost::make_shared<crocoddyl::SolverFDDP>(ddp_problem_);      
+    // fddp_->setCallbacks(fddp_cbs_);
+    fddp_->solve();
+}
 
 void UavDDPNode::fillUavParams()
 {
@@ -68,18 +89,12 @@ void UavDDPNode::fillUavParams()
         double z = rotor["z"]; 
 
         S(2, i) = 1.0; // Thrust
-        S(3, i) = y;  // Mx 
+        S(3, i) = y;   // Mx 
         S(4, i) = -x;  // My 
         S(5, i) = z*uav_params_->cm_/uav_params_->cf_; // Mz
     }
     uav_params_->tau_f_ = S;
 }
-
-void UavDDPNode::updateDDPProblem()
-{
-    ddp_problem_ = nav_problem_->createProblem(x0_, *wp_.get(), dt_, bl_frameid_);
-}
-
 
 void UavDDPNode::callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose)
 {
@@ -109,10 +124,30 @@ void UavDDPNode::publishControls()
 {
     uav_oc_msgs::UAVOptCtlPolicy policy_msg;
     
-    policy_msg.ffterm.mx = u_traj_[0][0];
-    policy_msg.ffterm.my = u_traj_[0][1];
-    policy_msg.ffterm.mz = u_traj_[0][2];
-    policy_msg.ffterm.th = 0.6;
+    // Header
+    policy_msg.header.stamp = ros::Time::now();
+
+    // U desired for the current node
+    // Missing to saturate function  
+    policy_msg.u_desired = std::vector<float>(uav_params_->n_rotors_);
+    for (int ii = 0; ii < uav_params_->n_rotors_; ++ii)
+    {
+        policy_msg.u_desired[ii] = nav_problem_->actuation_->calc();
+        fddp_->get_us()[0][ii];
+    }
+    
+    // State desired for the current node
+    int ndx = fddp_->get_xs()[0].size();
+    policy_msg.x_desired = std::vector<float>(ndx);
+    for (int ii = 0; ii < ndx; ++ii)
+    {
+        policy_msg.x_desired[ii] = fddp_->get_xs()[0][ii];
+    }
+
+    policy_msg.ffterm.mx = fddp_->get_k()[0][0];
+    policy_msg.ffterm.my = fddp_->get_k()[0][1];
+    policy_msg.ffterm.mz = fddp_->get_k()[0][2];
+    policy_msg.ffterm.th = fddp_->get_k()[0][3];
 
     pub_policy_.publish(policy_msg);
 }
@@ -121,19 +156,15 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, ros::this_node::getName());
     UavDDPNode croco_node;
-    ros::Rate loop_rate(200);
+    ros::Rate loop_rate(500);
 
 
     while (ros::ok())
-    {
-        
-        croco_node.updateDDPProblem();
-        crocoddyl::SolverFDDP fddp(croco_node.ddp_problem_);
-        
-        fddp.solve(croco_node.x_traj_, croco_node.u_traj_);
-        croco_node.x_traj_ = fddp.get_xs();
-        croco_node.u_traj_ = fddp.get_us();  
-        
+    {    
+        croco_node.ddp_problem_->set_x0(croco_node.x0_);
+
+        croco_node.fddp_->solve(croco_node.fddp_->get_xs(), croco_node.fddp_->get_us());
+
         croco_node.publishControls();
 
         ros::spinOnce();

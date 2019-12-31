@@ -1,8 +1,8 @@
 multirotor:
-    cf: 5.5e-5
-    cm: 6.0e-6
-    max_thrust: 5
-    min_thrust: 0
+    cf: 1.373e-5
+    cm: 2.523e-7
+    max_thrust: 5.0
+    min_thrust: 0.1
     rotors:
         -   x:  0.13
             y: -0.22
