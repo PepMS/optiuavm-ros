@@ -35,7 +35,7 @@ void UavDDPNode::initializeDDP()
     tpos << 0,0,1;
     Eigen::Quaterniond tquat(1,0,0,0);
     Eigen::Vector3d zero_vel = Eigen::Vector3d::Zero();
-    wp_ = boost::make_shared<crocoddyl::WayPoint>(100, tpos, tquat, zero_vel, zero_vel);
+    wp_ = boost::make_shared<crocoddyl::WayPoint>(50, tpos, tquat, zero_vel, zero_vel);
 
     // Navigation problem
     nav_problem_ = boost::make_shared<crocoddyl::SimpleUavUamGotoProblem>(uav_model_, uav_params_);
@@ -50,6 +50,7 @@ void UavDDPNode::initializeDDP()
     fddp_ = boost::make_shared<crocoddyl::SolverFDDP>(ddp_problem_);      
     // fddp_->setCallbacks(fddp_cbs_);
     fddp_->solve();
+    fddp_->solve(fddp_->get_xs(), fddp_->get_us());
 }
 
 void UavDDPNode::fillUavParams()
@@ -128,12 +129,11 @@ void UavDDPNode::publishControls()
     policy_msg.header.stamp = ros::Time::now();
 
     // U desired for the current node
-    // Missing to saturate function  
     policy_msg.u_desired = std::vector<float>(uav_params_->n_rotors_);
-    for (int ii = 0; ii < uav_params_->n_rotors_; ++ii)
-    {
-        policy_msg.u_desired[ii] = fddp_->get_us()[0][ii];
-    }
+    policy_msg.u_desired[0] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[3];
+    policy_msg.u_desired[1] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[4];
+    policy_msg.u_desired[2] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[5];
+    policy_msg.u_desired[3] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[2];    
     
     // State desired for the current node
     int ndx = fddp_->get_xs()[0].size();
