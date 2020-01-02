@@ -5,9 +5,11 @@ UavDDPNode::UavDDPNode()
 {
     // Initialize specific classes needed in the DDP solver
     initializeDDP();
-    
+
+    sb_pose_opt_ = ros::SubscribeOptions::create<geometry_msgs::PoseStamped>("/mavros/local_position/pose", 1, boost::bind(&UavDDPNode::callbackPose, this, _1), ros::VoidPtr(), &sb_pose_queue_);
     // Publishers and subscribers
-    sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
+    // sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
+    sb_pose_ = nh_.subscribe(sb_pose_opt_);
     sb_twist_ = nh_.subscribe("/mavros/local_position/velocity_body", 1, &UavDDPNode::callbackTwist, this);
     pub_policy_ = nh_.advertise<uav_oc_msgs::UAVOptCtlPolicy>("/optctl/actuator_control", 10);    
 }
@@ -51,6 +53,8 @@ void UavDDPNode::initializeDDP()
     // fddp_->setCallbacks(fddp_cbs_);
     fddp_->solve();
     fddp_->solve(fddp_->get_xs(), fddp_->get_us());
+    fddp_->solve(fddp_->get_xs(), fddp_->get_us(), 5);
+    
 }
 
 void UavDDPNode::fillUavParams()
@@ -105,6 +109,7 @@ void UavDDPNode::callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_po
     
     x0_.head(3) << pose.position.x, pose.position.y, pose.position.z;
     x0_.segment(3,4) << quat0.x(), quat0.y(), quat0.z(), quat0.w();
+    std::cout << "Callbasck!" << std::endl;
 }
 
 void UavDDPNode::callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_twist)
@@ -153,12 +158,12 @@ int main(int argc, char **argv)
     UavDDPNode croco_node;
     ros::Rate loop_rate(500);
 
-
     while (ros::ok())
     {    
+        croco_node.sb_pose_queue_.callOne();
         croco_node.ddp_problem_->set_x0(croco_node.x0_);
 
-        croco_node.fddp_->solve(croco_node.fddp_->get_xs(), croco_node.fddp_->get_us());
+        croco_node.fddp_->solve(croco_node.fddp_->get_xs(), croco_node.fddp_->get_us(), 5);
 
         croco_node.publishControls();
 

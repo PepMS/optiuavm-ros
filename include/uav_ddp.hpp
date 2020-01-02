@@ -18,6 +18,8 @@
  *      ROS includes      *
  **************************/
 #include <ros/ros.h>
+#include <ros/subscribe_options.h>
+#include <ros/callback_queue.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <mavros_msgs/ActuatorControl.h>
@@ -30,6 +32,8 @@ class UavDDPNode
 
     // ROS related
     ros::NodeHandle nh_;
+    ros::CallbackQueue sb_pose_queue_;
+    ros::SubscribeOptions sb_pose_opt_;
     ros::Subscriber sb_pose_;
     ros::Subscriber sb_twist_;
     ros::Publisher pub_policy_;
