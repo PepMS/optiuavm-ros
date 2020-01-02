@@ -105,8 +105,6 @@ void UavDDPNode::callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_po
     
     x0_.head(3) << pose.position.x, pose.position.y, pose.position.z;
     x0_.segment(3,4) << quat0.x(), quat0.y(), quat0.z(), quat0.w();
-
-    // std::cout << "New position:" << std::endl << x0_ << std::endl;
 }
 
 void UavDDPNode::callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_twist)
@@ -117,8 +115,6 @@ void UavDDPNode::callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_
     x0_twist << twist.linear.x, twist.linear.y, twist.linear.z, twist.angular.x, twist.angular.y, twist.angular.z; 
 
     x0_.tail(6) = x0_twist;
-
-    // std::cout << "New position:" << std::endl << x0_ << std::endl;
 }
 
 void UavDDPNode::publishControls()
