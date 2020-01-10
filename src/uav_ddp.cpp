@@ -6,10 +6,15 @@ UavDDPNode::UavDDPNode()
     // Initialize specific classes needed in the DDP solver
     initializeDDP();
 
-    sb_pose_opt_ = ros::SubscribeOptions::create<geometry_msgs::PoseStamped>("/mavros/local_position/pose", 1, boost::bind(&UavDDPNode::callbackPose, this, _1), ros::VoidPtr(), &sb_pose_queue_);
+    // Multithread
+    // sb_pose_opt_ = ros::SubscribeOptions::create<geometry_msgs::PoseStamped>("/mavros/local_position/pose", 1, boost::bind(&UavDDPNode::callbackPose, this, _1), ros::VoidPtr(), &sb_pose_queue_);
+    // sb_pose_ = nh_.subscribe(sb_pose_opt_);
+
+    // sb_twist_opt_ = ros::SubscribeOptions::create<geometry_msgs::TwistStamped>("/mavros/local_position/velocity_body", 1, boost::bind(&UavDDPNode::callbackTwist, this, _1), ros::VoidPtr(), &sb_twist_queue_);
+    // sb_twist_ = nh_.subscribe(sb_twist_opt_);
+
     // Publishers and subscribers
-    // sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
-    sb_pose_ = nh_.subscribe(sb_pose_opt_);
+    sb_pose_ = nh_.subscribe("/mavros/local_position/pose", 1, &UavDDPNode::callbackPose, this);
     sb_twist_ = nh_.subscribe("/mavros/local_position/velocity_body", 1, &UavDDPNode::callbackTwist, this);
     pub_policy_ = nh_.advertise<uav_oc_msgs::UAVOptCtlPolicy>("/optctl/actuator_control", 10);    
 }
@@ -50,7 +55,7 @@ void UavDDPNode::initializeDDP()
 
     // Setting the solver
     fddp_ = boost::make_shared<crocoddyl::SolverFDDP>(ddp_problem_);      
-    // fddp_->setCallbacks(fddp_cbs_);
+    fddp_->setCallbacks(fddp_cbs_);
     fddp_->solve();
     fddp_->solve(fddp_->get_xs(), fddp_->get_us());
     fddp_->solve(fddp_->get_xs(), fddp_->get_us(), 5);
@@ -103,53 +108,51 @@ void UavDDPNode::fillUavParams()
 
 void UavDDPNode::callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose)
 {
-    geometry_msgs::Pose pose = msg_pose->pose; 
-    Eigen::Quaterniond quat0(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
-    quat0.normalize();
-    
-    x0_.head(3) << pose.position.x, pose.position.y, pose.position.z;
-    x0_.segment(3,4) << quat0.x(), quat0.y(), quat0.z(), quat0.w();
-    std::cout << "Callbasck!" << std::endl;
+    q0_.x() =  msg_pose->pose.orientation.x;
+    q0_.y() =  msg_pose->pose.orientation.y;
+    q0_.z() =  msg_pose->pose.orientation.z;
+    q0_.w() =  msg_pose->pose.orientation.w;
+    q0_.normalize();
+
+    x0_.head(3) << msg_pose->pose.position.x, msg_pose->pose.position.y, msg_pose->pose.position.z;
+    x0_.segment(3,4) << q0_.x(), q0_.y(), q0_.z(), q0_.w();
+    // std::cout << "Callback pose!" << std::endl;
 }
 
 void UavDDPNode::callbackTwist(const geometry_msgs::TwistStamped::ConstPtr& msg_twist)
 {
-    geometry_msgs::Twist twist = msg_twist->twist;
-    Eigen::VectorXd x0_twist(6);
+    x0_.tail(6) << msg_twist->twist.linear.x, msg_twist->twist.linear.y, msg_twist->twist.linear.z, msg_twist->twist.angular.x, msg_twist->twist.angular.y, msg_twist->twist.angular.z;
 
-    x0_twist << twist.linear.x, twist.linear.y, twist.linear.z, twist.angular.x, twist.angular.y, twist.angular.z; 
-
-    x0_.tail(6) = x0_twist;
+    // std::cout << "Callback twist!" << std::endl;
+    // std::cout << x0_ << std::endl;
 }
 
 void UavDDPNode::publishControls()
-{
-    uav_oc_msgs::UAVOptCtlPolicy policy_msg;
-    
+{   
     // Header
-    policy_msg.header.stamp = ros::Time::now();
+    policy_msg_.header.stamp = ros::Time::now();
 
     // U desired for the current node
-    policy_msg.u_desired = std::vector<float>(uav_params_->n_rotors_);
-    policy_msg.u_desired[0] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[3];
-    policy_msg.u_desired[1] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[4];
-    policy_msg.u_desired[2] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[5];
-    policy_msg.u_desired[3] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[2];    
+    policy_msg_.u_desired = std::vector<float>(uav_params_->n_rotors_);
+    policy_msg_.u_desired[0] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[3];
+    policy_msg_.u_desired[1] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[4];
+    policy_msg_.u_desired[2] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[5];
+    policy_msg_.u_desired[3] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[2];    
     
     // State desired for the current node
     int ndx = fddp_->get_xs()[0].size();
-    policy_msg.x_desired = std::vector<float>(ndx);
+    policy_msg_.x_desired = std::vector<float>(ndx);
     for (int ii = 0; ii < ndx; ++ii)
     {
-        policy_msg.x_desired[ii] = fddp_->get_xs()[0][ii];
+        policy_msg_.x_desired[ii] = fddp_->get_xs()[0][ii];
     }
 
-    policy_msg.ffterm.mx = fddp_->get_k()[0][0];
-    policy_msg.ffterm.my = fddp_->get_k()[0][1];
-    policy_msg.ffterm.mz = fddp_->get_k()[0][2];
-    policy_msg.ffterm.th = fddp_->get_k()[0][3];
+    policy_msg_.ffterm.mx = fddp_->get_k()[0][0];
+    policy_msg_.ffterm.my = fddp_->get_k()[0][1];
+    policy_msg_.ffterm.mz = fddp_->get_k()[0][2];
+    policy_msg_.ffterm.th = fddp_->get_k()[0][3];
 
-    pub_policy_.publish(policy_msg);
+    pub_policy_.publish(policy_msg_);
 }
 
 int main(int argc, char **argv)
@@ -158,16 +161,32 @@ int main(int argc, char **argv)
     UavDDPNode croco_node;
     ros::Rate loop_rate(500);
 
+    // Multithread
+    // ros::AsyncSpinner async_spinner_1(1, &croco_node.sb_pose_queue_);
+    // ros::AsyncSpinner async_spinner_2(1, &croco_node.sb_twist_queue_);
+    // async_spinner_1.start();
+    // async_spinner_2.start();
+    
+
     while (ros::ok())
     {    
-        croco_node.sb_pose_queue_.callOne();
+        // croco_node.sb_pose_queue_.callOne();
+        // croco_node.sb_twist_queue_.callOne();
+        // croco_node.mut_twist0_.lock();
+        // croco_node.mut_pose0_.lock();
+        // croco_node.mut_twist0_.unlock();
+        // croco_node.mut_pose0_.unlock();
+        ros::spinOnce();
         croco_node.ddp_problem_->set_x0(croco_node.x0_);
-
         croco_node.fddp_->solve(croco_node.fddp_->get_xs(), croco_node.fddp_->get_us(), 5);
+
+        if (croco_node.fddp_->get_stop() > 1e-5)
+        {
+            ROS_WARN("Stop condition too big");
+        }
 
         croco_node.publishControls();
 
-        ros::spinOnce();
         loop_rate.sleep();
     }
     return 0;
