@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(uav_optimal_control)
+project(optiuavm_ros)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
@@ -19,7 +19,9 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 # System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+list(APPEND CMAKE_MODULE_PATH "/usr/local/lib/cmake/OptiUAVM/")
+find_package(YamlCpp REQUIRED)
+
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -108,7 +110,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
  INCLUDE_DIRS include
-#  LIBRARIES uav_optimal_control
+#  LIBRARIES optiuavm_ros
  CATKIN_DEPENDS mavros roscpp std_msgs geometry_msgs
 #  DEPENDS system_lib
 )
@@ -123,11 +125,12 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   /usr/local/include/
+  ${YAMLCPP_INCLUDE_DIR}
 )
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/uav_optimal_control.cpp
+#   src/${PROJECT_NAME}/optiuavm_ros.cpp
 # )
 
 ## Add cmake target dependencies of the library
@@ -154,6 +157,8 @@ add_executable(${PROJECT_NAME}_node src/uav_ddp.cpp)
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   -lcrocoddyl
+  -loptiuavm
+  ${YAMLCPP_LIBRARY}
 )
 
 #############
@@ -203,7 +208,7 @@ target_link_libraries(${PROJECT_NAME}_node
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_uav_optimal_control.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_optiuavm_ros.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()

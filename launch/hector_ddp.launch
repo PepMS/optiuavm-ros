@@ -1,5 +1,5 @@
 <launch>
     <!-- <include file="$(find px4)/launch/mavros_posix_sitl.launch"/> -->
-    <rosparam file="$(find uav_optimal_control)/config/hector.yaml" />
-    <node output="screen" name="uav_optctl_ddp" pkg="uav_optimal_control" type="uav_optimal_control_node"/>
+    <rosparam file="$(find optiuavm_ros)/config/hector.yaml" />
+    <node output="screen" name="uav_optctl_ddp" pkg="optiuavm_ros" type="optiuavm_ros_node"/>
 </launch>

@@ -6,6 +6,10 @@ UavDDPNode::UavDDPNode()
     // Initialize specific classes needed in the DDP solver
     initializeDDP();
 
+    tau_ = Eigen::VectorXd::Zero(uav_model_.nv);
+    optiuavm::computeGeneralizedTorqueMax(uav_params_, uav_model_.nv, nav_problem_->actuation_->get_nu(), tau_max_);
+    tau_min_ = tau_max_;
+    tau_min_(2) = 0.0;
     // Multithread
     // sb_pose_opt_ = ros::SubscribeOptions::create<geometry_msgs::PoseStamped>("/mavros/local_position/pose", 1, boost::bind(&UavDDPNode::callbackPose, this, _1), ros::VoidPtr(), &sb_pose_queue_);
     // sb_pose_ = nh_.subscribe(sb_pose_opt_);
@@ -27,28 +31,35 @@ void UavDDPNode::initializeDDP()
     pinocchio::urdf::buildModel(EXAMPLE_ROBOT_DATA_MODEL_DIR "/iris_description/robots/iris_simple.urdf",  pinocchio::JointModelFreeFlyer(), uav_model_);
 
     // Load UAV params
+    ParserYAML yaml_file("/home/pepms/ros-ws/uav-ws/src/optiuavm_ros/config/iris.yaml", "", true);
+    optiuavm::ParamsServer server(yaml_file.getParams());
+
     uav_params_ = boost::make_shared<crocoddyl::UavUamParams>();
-    fillUavParams();
+    optiuavm::fillUavUamParams(*uav_params_, server);
 
     // Frame we want in the cost function
     bl_frameid_ = uav_model_.getFrameId("iris__base_link");
 
     // x0_:Set an initial pose (should be read from topic)
     x0_ = Eigen::VectorXd::Zero(uav_model_.nv*2 + 1);
+    x0_(2) = 2.5;
     x0_(6) = 1.0;
+
+    tau_ = Eigen::VectorXd::Zero(uav_model_.nv);
     
     // This may be problematic as tpos and tquat are passed by reference so when the constructor ends, it may destruct both variables.
     Eigen::Vector3d tpos;
     tpos << 0,0,1;
     Eigen::Quaterniond tquat(1,0,0,0);
     Eigen::Vector3d zero_vel = Eigen::Vector3d::Zero();
-    wp_ = boost::make_shared<crocoddyl::WayPoint>(50, tpos, tquat, zero_vel, zero_vel);
+    wp_ = boost::make_shared<optiuavm::WayPoint>(15, tpos, tquat, zero_vel, zero_vel);
 
     // Navigation problem
-    nav_problem_ = boost::make_shared<crocoddyl::SimpleUavUamGotoProblem>(uav_model_, uav_params_);
+    nav_problem_ = boost::make_shared<optiuavm::SimpleGotoProblem>(uav_model_, *uav_params_, true);
 
     // Shooting problem
-    ddp_problem_ = nav_problem_->createProblem(x0_, *wp_.get(), 2e-2, bl_frameid_);
+    double dt = 6.25e-3; // (160 Hz)
+    ddp_problem_ = nav_problem_->createProblem(x0_, *wp_, dt, bl_frameid_);
 
     // Solver callbacks
     fddp_cbs_.push_back(boost::make_shared<crocoddyl::CallbackVerbose>());
@@ -58,53 +69,52 @@ void UavDDPNode::initializeDDP()
     fddp_->setCallbacks(fddp_cbs_);
     fddp_->solve();
     fddp_->solve(fddp_->get_xs(), fddp_->get_us());
-    fddp_->solve(fddp_->get_xs(), fddp_->get_us(), 5);
     
 }
 
-void UavDDPNode::fillUavParams()
-{
-    if (! nh_.hasParam("multirotor"))
-    {
-        ROS_ERROR("Fill UAV params: multirotor parameter not found. Please, load the YAML file with the multirotor description.");
-    }     
+// void UavDDPNode::fillUavParams()
+// {
+//     if (! nh_.hasParam("multirotor"))
+//     {
+//         ROS_ERROR("Fill UAV params: multirotor parameter not found. Please, load the YAML file with the multirotor description.");
+//     }     
     
-    if (!nh_.getParam("multirotor/cf", uav_params_->cf_))
-        ROS_ERROR("Fill UAV params: please, specify the thrust coefficient for the propellers (cf).");
+//     if (!nh_.getParam("multirotor/cf", uav_params_->cf_))
+//         ROS_ERROR("Fill UAV params: please, specify the thrust coefficient for the propellers (cf).");
     
-    if (!nh_.getParam("multirotor/cm", uav_params_->cm_))
-        ROS_ERROR("Fill UAV params: please, specify the torque coefficient for the propellers (cm).");
+//     if (!nh_.getParam("multirotor/cm", uav_params_->cm_))
+//         ROS_ERROR("Fill UAV params: please, specify the torque coefficient for the propellers (cm).");
     
-    if (!nh_.getParam("multirotor/max_thrust", uav_params_->max_thrust_))
-        ROS_ERROR("Fill UAV params: please, specify the max lift force (max_thrust) that a rotor can produce.");
+//     if (!nh_.getParam("multirotor/max_thrust", uav_params_->max_thrust_))
+//         ROS_ERROR("Fill UAV params: please, specify the max lift force (max_thrust) that a rotor can produce.");
     
-    if (!nh_.getParam("multirotor/min_thrust", uav_params_->min_thrust_))
-        ROS_ERROR("Fill UAV params: please, specify the min lift force (max_thrust) that a rotor can produce.");
+//     if (!nh_.getParam("multirotor/min_thrust", uav_params_->min_thrust_))
+//         ROS_ERROR("Fill UAV params: please, specify the min lift force (max_thrust) that a rotor can produce.");
 
-    XmlRpc::XmlRpcValue rotors;
-    if (!nh_.getParam("multirotor/rotors", rotors))
-        ROS_ERROR("Fill UAV params: please, specify the position of the rotors.");
+//     XmlRpc::XmlRpcValue rotors;
+//     if (!nh_.getParam("multirotor/rotors", rotors))
+//         ROS_ERROR("Fill UAV params: please, specify the position of the rotors.");
     
-    if (rotors.size() < 4)
-        ROS_ERROR("Please, specify more than 3 rotors. This node is intended for planar multirotors.");
+//     if (rotors.size() < 4)
+//         ROS_ERROR("Please, specify more than 3 rotors. This node is intended for planar multirotors.");
 
-    uav_params_->n_rotors_ = rotors.size();
-    Eigen::MatrixXd S = Eigen::MatrixXd::Zero(6, rotors.size());
+//     uav_params_->n_rotors_ = rotors.size();
+//     Eigen::MatrixXd S = Eigen::MatrixXd::Zero(6, rotors.size());
 
-    for (int32_t i = 0; i < rotors.size(); ++i)
-    {
-        XmlRpc::XmlRpcValue rotor = rotors[i];
-        double x = rotor["x"]; 
-        double y = rotor["y"]; 
-        double z = rotor["z"]; 
+//     for (int32_t i = 0; i < rotors.size(); ++i)
+//     {
+//         XmlRpc::XmlRpcValue rotor = rotors[i];
+//         double x = rotor["x"]; 
+//         double y = rotor["y"]; 
+//         double z = rotor["z"]; 
 
-        S(2, i) = 1.0; // Thrust
-        S(3, i) = y;   // Mx 
-        S(4, i) = -x;  // My 
-        S(5, i) = z*uav_params_->cm_/uav_params_->cf_; // Mz
-    }
-    uav_params_->tau_f_ = S;
-}
+//         S(2, i) = 1.0; // Thrust
+//         S(3, i) = y;   // Mx 
+//         S(4, i) = -x;  // My 
+//         S(5, i) = z*uav_params_->cm_/uav_params_->cf_; // Mz
+//     }
+//     uav_params_->tau_f_ = S;
+// }
 
 void UavDDPNode::callbackPose(const geometry_msgs::PoseStamped::ConstPtr& msg_pose)
 {
@@ -133,11 +143,19 @@ void UavDDPNode::publishControls()
     policy_msg_.header.stamp = ros::Time::now();
 
     // U desired for the current node
-    policy_msg_.u_desired = std::vector<float>(uav_params_->n_rotors_);
-    policy_msg_.u_desired[0] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[3];
-    policy_msg_.u_desired[1] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[4];
-    policy_msg_.u_desired[2] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[5];
-    policy_msg_.u_desired[3] = nav_problem_->actuation_->get_generalizedTorque(fddp_->get_us()[0])[2];    
+
+    
+
+    optiuavm::getGeneralizedTorque(ddp_problem_->get_runningDatas()[0], tau_);
+    std::cout << "Squash in: " << std::endl << fddp_->get_us()[0] << std::endl;
+    nav_problem_->actuation_->getSquashing().calc(fddp_->get_us()[0]);
+    std::cout << std::endl << "Squash out: " << std::endl << nav_problem_->actuation_->getSquashing().get_v() << std::endl;
+    std::cout << "Tau value: " << std::endl << tau_ << std::endl;
+    policy_msg_.u_desired = std::vector<float>(uav_params_->n_rotors);
+    policy_msg_.u_desired[0] = tau_[3];
+    policy_msg_.u_desired[1] = tau_[4];
+    policy_msg_.u_desired[2] = tau_[5];
+    policy_msg_.u_desired[3] = tau_[2];    
     
     // State desired for the current node
     int ndx = fddp_->get_xs()[0].size();
@@ -178,12 +196,13 @@ int main(int argc, char **argv)
         // croco_node.mut_pose0_.unlock();
         ros::spinOnce();
         croco_node.ddp_problem_->set_x0(croco_node.x0_);
-        croco_node.fddp_->solve(croco_node.fddp_->get_xs(), croco_node.fddp_->get_us(), 5);
+        std::cout << "Initial state: " << std::endl << croco_node.x0_ << std::endl;
+        croco_node.fddp_->solve(croco_node.fddp_->get_xs(), croco_node.fddp_->get_us(), 1);
 
-        if (croco_node.fddp_->get_stop() > 1e-5)
-        {
-            ROS_WARN("Stop condition too big");
-        }
+        // if (croco_node.fddp_->get_stop() > 1e-5)
+        // {
+        //     ROS_WARN("Stop condition too big");
+        // }
 
         croco_node.publishControls();
 
