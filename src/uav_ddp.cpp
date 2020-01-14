@@ -6,10 +6,18 @@ UavDDPNode::UavDDPNode()
     // Initialize specific classes needed in the DDP solver
     initializeDDP();
 
-    tau_ = Eigen::VectorXd::Zero(uav_model_.nv);
-    optiuavm::computeGeneralizedTorqueMax(uav_params_, uav_model_.nv, nav_problem_->actuation_->get_nu(), tau_max_);
-    tau_min_ = tau_max_;
+    tau_     = Eigen::VectorXd::Zero(uav_model_.nv);
+    tau_max_ = Eigen::VectorXd::Zero(uav_model_.nv);
+    optiuavm::computeGeneralizedTorqueMax(*uav_params_, uav_model_.nv, nav_problem_->actuation_->get_nu(), tau_max_);
+    tau_min_ = -tau_max_;
     tau_min_(2) = 0.0;
+    
+    px4_tau_ = Eigen::VectorXd::Zero(4);
+    px4_tau_min_ = Eigen::VectorXd::Zero(4);
+    px4_tau_max_ = Eigen::VectorXd::Zero(4);
+    px4_tau_min_ << 0.0, -1.0, -1.0, -1.0; // T, Mx, My, Mz
+    px4_tau_max_ << 1.0,  1.0,  1.0,  1.0; // T, Mx, My, Mz
+    std::cout << "Here!" << std::endl;
     // Multithread
     // sb_pose_opt_ = ros::SubscribeOptions::create<geometry_msgs::PoseStamped>("/mavros/local_position/pose", 1, boost::bind(&UavDDPNode::callbackPose, this, _1), ros::VoidPtr(), &sb_pose_queue_);
     // sb_pose_ = nh_.subscribe(sb_pose_opt_);
@@ -44,8 +52,6 @@ void UavDDPNode::initializeDDP()
     x0_ = Eigen::VectorXd::Zero(uav_model_.nv*2 + 1);
     x0_(2) = 2.5;
     x0_(6) = 1.0;
-
-    tau_ = Eigen::VectorXd::Zero(uav_model_.nv);
     
     // This may be problematic as tpos and tquat are passed by reference so when the constructor ends, it may destruct both variables.
     Eigen::Vector3d tpos;
@@ -142,20 +148,19 @@ void UavDDPNode::publishControls()
     // Header
     policy_msg_.header.stamp = ros::Time::now();
 
-    // U desired for the current node
-
-    
-
+    // U desired for the current node 
     optiuavm::getGeneralizedTorque(ddp_problem_->get_runningDatas()[0], tau_);
+    optiuavm::mapVector(tau_.tail(4), tau_min_.tail(4), tau_max_.tail(4), px4_tau_min_, px4_tau_max_, px4_tau_);
+
     std::cout << "Squash in: " << std::endl << fddp_->get_us()[0] << std::endl;
-    nav_problem_->actuation_->getSquashing().calc(fddp_->get_us()[0]);
-    std::cout << std::endl << "Squash out: " << std::endl << nav_problem_->actuation_->getSquashing().get_v() << std::endl;
-    std::cout << "Tau value: " << std::endl << tau_ << std::endl;
+    std::cout << std::endl << "Squash out: " << std::endl << tau_<< std::endl;
+    std::cout << "Tau PX4: " << std::endl << px4_tau_ << std::endl;
+
     policy_msg_.u_desired = std::vector<float>(uav_params_->n_rotors);
-    policy_msg_.u_desired[0] = tau_[3];
-    policy_msg_.u_desired[1] = tau_[4];
-    policy_msg_.u_desired[2] = tau_[5];
-    policy_msg_.u_desired[3] = tau_[2];    
+    policy_msg_.u_desired[0] = px4_tau_[1];
+    policy_msg_.u_desired[1] = -px4_tau_[2];
+    policy_msg_.u_desired[2] = -px4_tau_[3];
+    policy_msg_.u_desired[3] = px4_tau_[0];    
     
     // State desired for the current node
     int ndx = fddp_->get_xs()[0].size();

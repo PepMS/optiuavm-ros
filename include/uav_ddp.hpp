@@ -8,10 +8,11 @@
 #include <crocoddyl/core/solvers/fddp.hpp>
 #include <crocoddyl/core/utils/callbacks.hpp>
 
-#include "optiuavm/utils/actuation.hpp"
-#include "optiuavm/utils/fill_from_yaml.hpp"
 #include "optiuavm/algorithms/simple_goto.hpp"
 #include "optiuavm/algorithms/waypoint.hpp"
+#include "optiuavm/utils/actuation.hpp"
+#include "optiuavm/utils/fill_from_yaml.hpp"
+#include "optiuavm/utils/math.hpp"
 #include "optiuavm/yaml/params_server.hpp"
 #include "optiuavm/yaml/parser_yaml.hpp"
 
@@ -67,12 +68,14 @@ class UavDDPNode
     Eigen::VectorXd x0_;
     Eigen::Quaterniond q0_;
     Eigen::VectorXd tau_;
-    Eigen::VectorXd tau_max;
-    Eigen::VectorXd tau_min;
+    Eigen::VectorXd tau_max_;
+    Eigen::VectorXd tau_min_;
     std::vector<Eigen::VectorXd> x_traj_;
     std::vector<Eigen::VectorXd> u_traj_;
     uav_oc_msgs::UAVOptCtlPolicy policy_msg_;
 
+
+    Eigen::VectorXd px4_tau_;
     Eigen::VectorXd px4_tau_min_;
     Eigen::VectorXd px4_tau_max_;
 
